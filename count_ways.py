@@ -7,6 +7,11 @@ from pending_multipoly_cache import PendingMultipolyCache
 import util
 import pprint
 
+
+BUILDING_TAG='building'
+# HIGHWAY_TAGS = [motorway trunk primary secondary tertiary
+#                         unclassified residential motorway_link trunk_link primary_link]''
+
 class WayHandler(o.SimpleHandler):
   def __init__(self, node_index):
     self.idx = node_index
@@ -46,9 +51,9 @@ class WayHandler(o.SimpleHandler):
     if tags.get('building'):
       building_type = tags.get('building')
       self.counters.inc('building_counts.' + building_type)
-    if not self.mp_cache.consider_way(w) and w.is_closed():
+    is_multipoly_member = self.mp_cache.consider_way(w)
+    if not is_multipoly_member and w.is_closed() and tags.get('building'):
       print(json.dumps(util.geojson_way(w)))
-
 
 
 input = sys.argv[1] or "/Users/horace/data/osm_california.pbf"
