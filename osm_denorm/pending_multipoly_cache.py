@@ -1,4 +1,4 @@
-import util
+import osm_denorm.util as util
 import json
 import osmium as o
 import IPython

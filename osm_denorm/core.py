@@ -2,9 +2,9 @@ import json
 import osmium as o
 import sys
 import IPython
-from counters import Counters
-from pending_multipoly_cache import PendingMultipolyCache
-import util
+from osm_denorm.counters import Counters
+from osm_denorm.pending_multipoly_cache import PendingMultipolyCache
+import osm_denorm.util as util
 import pprint
 
 
@@ -12,10 +12,30 @@ BUILDING_TAG='building'
 # HIGHWAY_TAGS = [motorway trunk primary secondary tertiary
 #                         unclassified residential motorway_link trunk_link primary_link]''
 
-class WayHandler(o.SimpleHandler):
-  def __init__(self, node_index):
+class OSMHandler(o.SimpleHandler):
+  @staticmethod
+  def run(osm_file, geometry_handler, index_type = 'sparse_mem_array'):
+    print('index_type:')
+    print(index_type)
+    idx = o.index.create_map(index_type)
+    lh = o.NodeLocationsForWays(idx)
+    lh.ignore_errors()
+
+    handler = OSMHandler(idx, geometry_handler)
+
+    relations_pass_reader = o.io.Reader(osm_file, o.osm.osm_entity_bits.RELATION)
+    o.apply(relations_pass_reader, lh, handler)
+    relations_pass_reader.close()
+
+    full_pass_reader = o.io.Reader(osm_file, o.osm.osm_entity_bits.ALL)
+    o.apply(full_pass_reader, lh, handler)
+    full_pass_reader.close()
+    return handler
+
+  def __init__(self, node_index, geometry_handler):
+    self.geom_handler = geometry_handler
     self.idx = node_index
-    super(WayHandler, self).__init__()
+    super(OSMHandler, self).__init__()
 
     self.counters = Counters()
     self.mp_cache = PendingMultipolyCache()
@@ -53,22 +73,26 @@ class WayHandler(o.SimpleHandler):
       self.counters.inc('building_counts.' + building_type)
     is_multipoly_member = self.mp_cache.consider_way(w)
     if not is_multipoly_member and w.is_closed() and tags.get('building'):
-      print(json.dumps(util.geojson_way(w)))
+      self.geom_handler.completed_geometry(w)
 
+class GeometryHandler(object):
+  def completed_geometry(self, geom):
+    # print(json.dumps(util.geojson_way(w)))
+    print(geom)
 
-input = sys.argv[1] or "/Users/horace/data/osm_california.pbf"
-relations_pass_reader = o.io.Reader(input, o.osm.osm_entity_bits.RELATION)
+  def run_complete(self):
+    print('run complete')
 
-idx = o.index.create_map("sparse_mem_array")
-lh = o.NodeLocationsForWays(idx)
-lh.ignore_errors()
-handler = WayHandler(idx)
-o.apply(relations_pass_reader, lh, handler)
-relations_pass_reader.close()
-
-full_pass_reader = o.io.Reader(input, o.osm.osm_entity_bits.ALL)
-o.apply(full_pass_reader, lh, handler)
-full_pass_reader.close()
+if __name__ == "__main__":
+  # input = sys.argv[1] or "/Users/horace/data/osm_california.pbf"
+  if not sys.argv[1]:
+    print("*** Error: Must provide path to OSM PBF file as argument ***")
+    exit(1)
+  handler = denormalize_osm_file(sys.argv[1])
+  handler.counters.display()
+  pp = pprint.PrettyPrinter(indent=4)
+  way = handler.mp_cache.pending_multipolys[286293]['ways'][42341428]
+  rel = handler.mp_cache.pending_multipolys[286293]
 
 # Read 1
 # For multipolygon relations:
@@ -89,10 +113,6 @@ full_pass_reader.close()
 
 # handler.counters.set('multipoly_way_ids_set.mb', sys.getsizeof(handler.ways_for_pending_multipolys) / 1000000)
 # handler.counters.set('pending_multipolys.mb', sys.getsizeof(handler.pending_multipolys) / 1000000)
-handler.counters.display()
-pp = pprint.PrettyPrinter(indent=4)
-way = handler.mp_cache.pending_multipolys[286293]['ways'][42341428]
-rel = handler.mp_cache.pending_multipolys[286293]
 # IPython.embed()
 # pp.pprint(handler.mp_cache.pending_multipolys)
 # pp.pprint(handler.mp_cache.ways_to_rels)
