@@ -1,0 +1,14 @@
+* OSM Denormalize
+Read OSM PBF or XML files and output denormalized geometries.
+** Process
+Pass 1: Read only Relations looking for multipolygon rels; build an index of way ids -> relations so that we can insert member ways into the correct spot on the second pass
+
+Pass 2: Read nodes and ways
+For ways:
+*** a) way is member of a known multipolygon relation -- add it
+**** a) there are still more ways in this rel -- continue
+**** b) this is the final way in the multipoly -- output it
+*** b) way is independent -- output it, either as polygon or linestring
+** Handling Completed Multipolygons
+*** If there are multiple ways with role "outer", need to combine them into a single linear ring
+*** Then build a polygon with 1 outer and 0 or more inner rings (for geojson first ring is outer, all subsequent are inner)
