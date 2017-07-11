@@ -2,6 +2,8 @@ import osm_denorm.util as util
 import json
 import osmium as o
 import IPython
+from shapely.geometry import LineString
+from shapely.ops import linemerge
 
 gj = o.geom.GeoJSONFactory()
 
@@ -53,9 +55,11 @@ class PendingMultipolyCache(object):
         elif lr[-1] == geom[0]:
           outer_ring.insert(index, lr)
           inserted = True
-
       if not inserted:
         outer_ring.append(lr)
+    # if rel['id'] == 6653142:
+    #   IPython.embed()
+    print(outer_ring)
 
   def consider_way(self, way):
     if way.id in self.ways_to_rels:
@@ -66,14 +70,11 @@ class PendingMultipolyCache(object):
         # Either:
         # multiple outer ways representing a single linear ring
         # Or 1 outer and 1 or more inner representing a donut
-        print('Way %d completed rel %d' % (way.id, rel_id))
-
         if len(self.outer_ways(rel)) > 1:
-          # Rel has an outer ring composed of multiple ways, need to join them
+          print(rel_id)
           self.join_outer_rings(rel)
-          # print(json.dumps(util.geojson_rep(rel)))
-        else:
-          print(json.dumps(util.geojson_rep(rel)))
-      return True
+        return (True, rel)
+      else:
+        return (True, None)
     else:
-      return False
+      return (False, None)

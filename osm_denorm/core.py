@@ -71,9 +71,19 @@ class OSMHandler(o.SimpleHandler):
     if tags.get('building'):
       building_type = tags.get('building')
       self.counters.inc('building_counts.' + building_type)
-    is_multipoly_member = self.mp_cache.consider_way(w)
-    if not is_multipoly_member and w.is_closed() and tags.get('building'):
-      self.geom_handler.completed_geometry(w)
+    is_multipoly_member, completed_rel = self.mp_cache.consider_way(w)
+    if is_multipoly_member and completed_rel:
+      self.geom_handler.completed_geometry({'type': 'polygon',
+                                            'osm_entity': 'rel',
+                                            'osm_id': completed_rel['id'],
+                                            'tags': completed_rel['tags'],
+                                            'geometry': util.geojson_rel(completed_rel)})
+    elif not is_multipoly_member and w.is_closed() and tags.get('building'):
+      self.geom_handler.completed_geometry({'type': 'polygon',
+                                            'osm_entity': 'way',
+                                            'osm_id': w.id,
+                                            'tags': tags,
+                                            'geometry': util.geojson_way(w)})
 
 class GeometryHandler(object):
   def completed_geometry(self, geom):
