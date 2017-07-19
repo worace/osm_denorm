@@ -86,13 +86,18 @@ class RelWrapper(object):
       if self.outer_ring_contains_multiple_ways():
         return self.joined_outer_ring()
       else:
-        return self.outer_ways()[0].way.geometry
+        way = self.outer_ways()[0].way
+        if way.is_polygon():
+          return way.geometry
+        else:
+          print('Non-polygonal Outer Way %d for rel %d' % (way.id, self.id))
+          return None
     except IndexError:
       print('found way with missing nodes??')
       return None
 
   def inner_rings(self):
-    return [member.way.geometry for member in self.inner_ways()]
+    return [member.way.geometry for member in self.inner_ways() if member.way.is_polygon()]
 
   def geometry(self):
     outer = self.outer_ring()

@@ -36,3 +36,8 @@ class PendingMultipolyCache(object):
         return (True, None)
     else:
       return (False, None)
+
+  def remove_rel(self, rel):
+    for m in rel.way_members:
+      self.ways_to_rels.pop(m.id, None)
+    self.pending_multipolys.pop(rel.id, None)

@@ -6,7 +6,15 @@ class WayWrapper(object):
     self.id = way.id
     self.linestring = util.linestring(way)
     self.tags = util.tags_dict(way)
-    self.geometry = shapely.LineString(self.linestring)
+    try:
+      self.geometry = shapely.LineString(self.linestring)
+    except ValueError:
+      self.geometry = None
+      print('Way with invalid geometry: %d' % self.id)
+      print(self.linestring)
+
+  def has_valid_geometry(self):
+    return self.geometry != None
 
   def is_building(self):
     return 'building' in self.tags

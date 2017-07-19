@@ -32,6 +32,7 @@ class OSMHandler(o.SimpleHandler):
     full_pass_reader = o.io.Reader(osm_file, o.osm.osm_entity_bits.ALL)
     o.apply(full_pass_reader, lh, handler)
     full_pass_reader.close()
+    handler.geom_handler.run_complete()
     return handler
 
   def __init__(self, node_index, geometry_handler):
@@ -70,10 +71,13 @@ class OSMHandler(o.SimpleHandler):
 
   def way(self, w):
     count = self.counters.inc('ways')
-    if count % 10000 == 0:
-      print("Processed %d ways" % count)
+    # if count % 10000 == 0:
+    #   print("Processed %d ways" % count)
 
     way = WayWrapper(w)
+
+    if not way.has_valid_geometry():
+      return None
 
     if way.is_building():
       self.counters.inc('building_counts.' + way.tags.get('building'))
@@ -86,7 +90,7 @@ class OSMHandler(o.SimpleHandler):
                                             'osm_id': completed_rel.id,
                                             'tags': completed_rel.tags,
                                             'geometry': completed_rel.geometry()})
-
+      self.mp_cache.remove_rel(completed_rel)
     elif not is_multipoly_member and way.is_building() and way.is_polygon():
       self.geom_handler.completed_geometry({'type': 'polygon',
                                             'osm_entity': 'way',
@@ -95,15 +99,22 @@ class OSMHandler(o.SimpleHandler):
                                             'geometry': way.geometry})
 
 class GeometryHandler(object):
+  def __init__(self):
+    self.completed_ways = 0
+    self.completed_rels = 0
+
   def completed_geometry(self, geom):
-    if geom['osm_entity'] == 'rel':
-      if geom['geometry']:
-        print('.')
-        # print(geom)
-        # print(json.dumps(shapely.geometry.mapping(geom['geometry'])))
+    if geom['osm_entity'] == 'rel' and geom['geometry']:
+      if self.completed_rels % 10000 == 0: print('rels: %d' % self.completed_rels)
+      self.completed_rels += 1
+    if geom['osm_entity'] == 'way' and geom['geometry']:
+      if self.completed_ways % 10000 == 0: print('ways: %d' % self.completed_ways)
+      self.completed_ways += 1
 
   def run_complete(self):
     print('run complete')
+    print('ways: %d' % self.completed_ways)
+    print('rels: %d' % self.completed_rels)
 
 if __name__ == "__main__":
   # input = sys.argv[1] or "/Users/horace/data/osm_california.pbf"
