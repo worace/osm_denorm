@@ -60,7 +60,10 @@ class RelWrapper(object):
     for w in self.outer_ways():
       inserted = False
       new_segment = util.linestring(w.way)
-      for index, linestring in enumerate(outer_ring):
+      if len(new_segment) == 0:
+        continue
+      for index in range(len(outer_ring)):
+        linestring = outer_ring[index]
         if linestring[-1] == new_segment[0]:
           outer_ring.insert(index + 1, new_segment)
           inserted = True
@@ -83,11 +86,15 @@ class RelWrapper(object):
     return len(self.outer_ways()) > 1
 
   def outer_ring(self):
-    if self.outer_ring_contains_multiple_ways():
-      return self.joined_outer_ring()
-    else:
-      coords = util.linestring(self.outer_ways()[0].way)
-      return shapely.LinearRing(coords)
+    try:
+      if self.outer_ring_contains_multiple_ways():
+        return self.joined_outer_ring()
+      else:
+        coords = util.linestring(self.outer_ways()[0].way)
+        return shapely.LinearRing(coords)
+    except IndexError:
+      print('found way with missing nodes??')
+      return None
 
   def inner_rings(self):
     return [shapely.LinearRing(util.linestring(member.way)) for member in self.inner_ways()]

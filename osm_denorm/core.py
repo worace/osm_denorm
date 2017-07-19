@@ -17,7 +17,7 @@ class OSMHandler(o.SimpleHandler):
   def run(osm_file, geometry_handler, index_type = 'sparse_mem_array'):
     idx = o.index.create_map(index_type)
     lh = o.NodeLocationsForWays(idx)
-    lh.ignore_errors()
+    # lh.ignore_errors()
 
     handler = OSMHandler(idx, geometry_handler)
 
@@ -48,7 +48,7 @@ class OSMHandler(o.SimpleHandler):
 
   def node(self, n):
     nodes = self.counters.inc('nodes')
-    if nodes % 1000 == 0:
+    if nodes % 1000000 == 0:
       print("Processed %d nodes" % nodes)
 
   def relation(self, r):
@@ -69,7 +69,7 @@ class OSMHandler(o.SimpleHandler):
 
   def way(self, w):
     ways = self.counters.inc('ways')
-    if ways % 1000 == 0:
+    if ways % 10000 == 0:
       print("Processed %d ways" % ways)
     tags = util.tags_dict(w)
     if tags.get('building'):
@@ -77,8 +77,6 @@ class OSMHandler(o.SimpleHandler):
       self.counters.inc('building_counts.' + building_type)
     is_multipoly_member, completed_rel = self.mp_cache.consider_way(w)
     if is_multipoly_member and completed_rel:
-      print('completed rel:')
-      print(completed_rel)
       self.geom_handler.completed_geometry({'type': 'polygon',
                                             'osm_entity': 'rel',
                                             'osm_id': completed_rel.id,
@@ -93,11 +91,11 @@ class OSMHandler(o.SimpleHandler):
 
 class GeometryHandler(object):
   def completed_geometry(self, geom):
-    # print(json.dumps(util.geojson_way(w)))
     if geom['osm_entity'] == 'rel':
       if geom['geometry']:
-        print(geom)
-        print(json.dumps(shapely.geometry.mapping(geom['geometry'])))
+        print('.')
+        # print(geom)
+        # print(json.dumps(shapely.geometry.mapping(geom['geometry'])))
 
   def run_complete(self):
     print('run complete')
