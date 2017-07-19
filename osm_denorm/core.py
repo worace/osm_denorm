@@ -24,9 +24,9 @@ class OSMHandler(o.SimpleHandler):
     o.apply(relations_pass_reader, lh, handler)
     relations_pass_reader.close()
 
-    handler.receive_rels = False
+    print('**** REL PASS COMPLETE ****')
+    handler.receive_rels = False # Hack for not being able to specify entity bits properly
 
-    # flags = o.osm.osm_entity_bits.WAY | o.osm.osm_entity_bits.NODE
     full_pass_reader = o.io.Reader(osm_file, o.osm.osm_entity_bits.ALL)
     o.apply(full_pass_reader, lh, handler)
     full_pass_reader.close()
@@ -51,10 +51,12 @@ class OSMHandler(o.SimpleHandler):
       print("Processed %d nodes" % nodes)
 
   def relation(self, r):
+    if not self.receive_rels:
+      return None
     self.counters.inc('rels')
     if self.counters.get('rels') % 1000 == 0:
       print("Processed %d rels" % self.counters.get('rels'))
-    if self.receive_rels and self.mp_cache.consider_rel(r):
+    if self.mp_cache.consider_rel(r):
       self.counters.inc('rels.multipolygon')
 
   def geom(self, way):
@@ -91,8 +93,8 @@ class OSMHandler(o.SimpleHandler):
 class GeometryHandler(object):
   def completed_geometry(self, geom):
     # print(json.dumps(util.geojson_way(w)))
-    print('completed geom %s' % geom['type'])
-    # print(geom)
+    if geom['osm_entity'] == 'rel':
+      print(geom)
 
   def run_complete(self):
     print('run complete')
@@ -105,7 +107,8 @@ if __name__ == "__main__":
   osm_file = sys.argv[1]
   handler = GeometryHandler()
   # handler.counters.display()
-  OSMHandler.run(osm_file, handler)
+  h = OSMHandler.run(osm_file, handler)
+  print(h.counters.display())
   # pp = pprint.PrettyPrinter(indent=4)
   # way = handler.mp_cache.pending_multipolys[286293]['ways'][42341428]
   # rel = handler.mp_cache.pending_multipolys[286293]

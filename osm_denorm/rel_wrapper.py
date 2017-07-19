@@ -6,25 +6,13 @@ from shapely.ops import linemerge
 WAY_TYPE = 'w'
 
 class WayMember(object):
-  def __init__(self, way, rel):
-    self.pending_way = way
-    self.rel = rel
+  def __init__(self, pending_way):
+    self.id = pending_way.ref
+    self.role = pending_way.role
     self.way = None
-    self.role = self.pending_way.role
 
   def is_complete(self):
     return self.way != None
-
-  @property
-  def id(self):
-    return self.pending_way.ref
-
-  # @property
-  # def role(self):
-  #   try:
-  #     return self.pending_way.role
-  #   except UnicodeDecodeError:
-  #     return 'Unknown'
 
   def is_outer(self):
     return self.role == 'outer'
@@ -35,7 +23,7 @@ class WayMember(object):
 class RelWrapper(object):
   def __init__(self, rel):
     self.rel = rel
-    self.way_members = [WayMember(m, self) for m in self.rel.members if m.type == WAY_TYPE]
+    self.way_members = [WayMember(m) for m in self.rel.members if m.type == WAY_TYPE]
     self.members_index = {m.id: m for m in self.way_members}
     self.ways = []
     self.tags = util.tags_dict(self.rel)
