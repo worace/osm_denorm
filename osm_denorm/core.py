@@ -7,6 +7,7 @@ from pending_multipoly_cache import PendingMultipolyCache
 import util
 import pprint
 import shapely
+from way_wrapper import WayWrapper
 
 BUILDING_TAG='building'
 # HIGHWAY_TAGS = [motorway trunk primary secondary tertiary
@@ -68,26 +69,30 @@ class OSMHandler(o.SimpleHandler):
     print(self.geom(way))
 
   def way(self, w):
-    ways = self.counters.inc('ways')
-    if ways % 10000 == 0:
-      print("Processed %d ways" % ways)
-    tags = util.tags_dict(w)
-    if tags.get('building'):
-      building_type = tags.get('building')
-      self.counters.inc('building_counts.' + building_type)
-    is_multipoly_member, completed_rel = self.mp_cache.consider_way(w)
+    count = self.counters.inc('ways')
+    if count % 10000 == 0:
+      print("Processed %d ways" % count)
+
+    way = WayWrapper(w)
+
+    if way.is_building():
+      self.counters.inc('building_counts.' + way.tags.get('building'))
+
+    is_multipoly_member, completed_rel = self.mp_cache.consider_way(way)
+
     if is_multipoly_member and completed_rel:
       self.geom_handler.completed_geometry({'type': 'polygon',
                                             'osm_entity': 'rel',
                                             'osm_id': completed_rel.id,
                                             'tags': completed_rel.tags,
                                             'geometry': completed_rel.geometry()})
-    elif not is_multipoly_member and w.is_closed() and tags.get('building'):
+
+    elif not is_multipoly_member and way.is_building() and way.is_polygon():
       self.geom_handler.completed_geometry({'type': 'polygon',
                                             'osm_entity': 'way',
-                                            'osm_id': w.id,
-                                            'tags': tags,
-                                            'geometry': util.geojson_way(w)})
+                                            'osm_id': way.id,
+                                            'tags': way.tags,
+                                            'geometry': way.geometry})
 
 class GeometryHandler(object):
   def completed_geometry(self, geom):

@@ -22,18 +22,14 @@ class WayMember(object):
 
 class RelWrapper(object):
   def __init__(self, rel):
-    self.rel = rel
-    self.way_members = [WayMember(m) for m in self.rel.members if m.type == WAY_TYPE]
+    self.way_members = [WayMember(m) for m in rel.members if m.type == WAY_TYPE]
     self.members_index = {m.id: m for m in self.way_members}
     self.ways = []
-    self.tags = util.tags_dict(self.rel)
-    self.id = self.rel.id
+    self.tags = util.tags_dict(rel)
+    self.id = rel.id
 
   def has_ways(self):
     return len(self.outer_ways()) > 0
-
-  def way_members(self):
-    return filter(lambda m: m.type == WAY_TYPE, self.rel.members)
 
   def is_building(self):
     return 'building' in self.tags
@@ -59,7 +55,7 @@ class RelWrapper(object):
     # or: add shapely for combining geometries
     for w in self.outer_ways():
       inserted = False
-      new_segment = util.linestring(w.way)
+      new_segment = w.way.linestring
       if len(new_segment) == 0:
         continue
       for index in range(len(outer_ring)):
@@ -90,14 +86,13 @@ class RelWrapper(object):
       if self.outer_ring_contains_multiple_ways():
         return self.joined_outer_ring()
       else:
-        coords = util.linestring(self.outer_ways()[0].way)
-        return shapely.LinearRing(coords)
+        return self.outer_ways()[0].way.geometry
     except IndexError:
       print('found way with missing nodes??')
       return None
 
   def inner_rings(self):
-    return [shapely.LinearRing(util.linestring(member.way)) for member in self.inner_ways()]
+    return [member.way.geometry for member in self.inner_ways()]
 
   def geometry(self):
     outer = self.outer_ring()
