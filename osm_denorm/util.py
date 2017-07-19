@@ -6,14 +6,14 @@ def tags_dict(entity):
 def geometry(way):
   return [[n.lon, n.lat] for n in way.nodes]
 
-def linear_ring(way):
+def linestring(way):
   return [[n.lon, n.lat] for n in way.nodes]
 
 def geojson_way(way):
   return {'type': 'Polygon',
-          'coordinates': [linear_ring(way)]}
+          'coordinates': [linestring(way)]}
 
 def geojson_rel(rel_dict):
   outer_to_inner = sorted(rel_dict['ways'].values(), key=itemgetter('role'), reverse=True)
   return {'type': 'Polygon',
-          'coordinates': [linear_ring(way_dict['way']) for way_dict in outer_to_inner]}
+          'coordinates': [linestring(way_dict['way']) for way_dict in outer_to_inner]}

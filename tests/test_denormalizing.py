@@ -35,4 +35,5 @@ def test_joining_multiple_outer_ways():
   OSMHandler.run(test_osm_file, geom_handler)
   rels = geom_handler.geoms_by_type()['rel']
   rel = [r for r in rels if r['osm_id'] == rel_id][0]
+  print(rel)
   assert(len(rel['geometry']['coordinates']) == 1)

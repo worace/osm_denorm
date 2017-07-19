@@ -1,9 +1,11 @@
-import osm_denorm.util as util
+import util
 import json
 import osmium as o
 import IPython
-from shapely.geometry import LineString
+import shapely.geometry as shapely
 from shapely.ops import linemerge
+from shapely.geometry import asShape
+from rel_wrapper import RelWrapper
 
 gj = o.geom.GeoJSONFactory()
 
@@ -14,26 +16,27 @@ class PendingMultipolyCache(object):
     self.pending_multipolys = {}
 
   def cache_entry(self, rel):
-    members = [m for m in rel.members]
-    ways = filter(lambda m: m.type == WAY_TYPE, rel.members)
-    ways_dict = {}
-    for w in ways:
-      ways_dict[w.ref] = {'type': w.type, 'ref': w.ref, 'role': w.role, 'way': None}
-    return {'id': rel.id, 'tags': util.tags_dict(rel), 'ways': ways_dict, 'rel': rel}
+    # ways = filter(lambda m: m.type == WAY_TYPE, rel.members)
+    # ways_dict = {}
+    # for w in ways:
+    #   ways_dict[w.ref] = {'ref': w.ref,
+    #                       'role': w.role,
+    #                       'way': None}
+    return RelWrapper(rel)
+    # return {'id': rel.id, 'tags': util.tags_dict(rel), 'ways': ways_dict, 'rel': rel}
 
-  def consider_rel(self, rel):
-    tags = util.tags_dict(rel)
-    if tags.get('building') and tags.get('type') == 'multipolygon' and rel.id not in self.pending_multipolys:
-      cache_entry = self.cache_entry(rel)
-      self.pending_multipolys[rel.id] = cache_entry
-      for way_id in cache_entry['ways']:
-        self.ways_to_rels[way_id] = rel.id
+  def consider_rel(self, r):
+    rel = RelWrapper(r)
+    if rel.is_building() and rel.is_multipolygon() and rel.id not in self.pending_multipolys:
+      self.pending_multipolys[rel.id] = rel
+      for member in rel.way_members:
+        self.ways_to_rels[member.id] = rel.id
       return True
     else:
       return False
 
-  def is_rel_complete(self, rel):
-    return all(map(lambda w: w['way'], rel['ways'].values()))
+  # def is_rel_complete(self, rel):
+  #   return all(map(lambda w: w['way'], rel['ways'].values()))
 
   def outer_ways(self, rel):
     return [w for w in rel['ways'].values() if w['role'] == 'outer']
@@ -41,13 +44,14 @@ class PendingMultipolyCache(object):
   def inner_ways(self, rel):
     return [w for w in rel['ways'].values() if w['role'] == 'inner']
 
-  def join_outer_rings(self, rel):
-    ways = self.outer_ways(rel)
+  def joined_outer_rings(self, rel):
+    ways = rel.outer_ways()
     outer_ring = [] #2d array of geoms
     # TODO: Prune overlapping points when appending a ring section
+    # or: add shapely for combining geometries
     for w in ways:
       inserted = False
-      lr = util.linear_ring(w['way'])
+      lr = util.linestring(w['way'])
       for index, geom in enumerate(outer_ring):
         if geom[-1] == lr[0]:
           outer_ring.insert(index + 1, lr)
@@ -57,22 +61,38 @@ class PendingMultipolyCache(object):
           inserted = True
       if not inserted:
         outer_ring.append(lr)
-    # if rel['id'] == 6653142:
-    #   IPython.embed()
-    print(outer_ring)
+    merged = linemerge([shapely.LineString(r) for r in outer_ring])
+    if merged.is_closed and merged.is_valid:
+      return shapely.LinearRing(merged)
+    else:
+      IPython.embed()
+      # could be multipolygon with 2 non-touching outer rings
+      raise Exception('invalid geometry', merged)
+
+  def outer_ring(self, rel):
+    if len(self.outer_ways(rel)) > 1:
+      return self.joined_outer_rings(rel)
+    else:
+      way = self.outer_ways(rel)[0]
+      coords = util.linestring(way['way'])
+      return shapely.LinearRing(coords)
 
   def consider_way(self, way):
     if way.id in self.ways_to_rels:
       rel_id = self.ways_to_rels[way.id]
       rel = self.pending_multipolys[rel_id]
-      rel['ways'][way.id]['way'] = way
-      if self.is_rel_complete(rel):
+      rel.add_way_to_member(way)
+      # rel['ways'][way.id]['way'] = way
+      if rel.is_complete():
         # Either:
         # multiple outer ways representing a single linear ring
         # Or 1 outer and 1 or more inner representing a donut
-        if len(self.outer_ways(rel)) > 1:
-          print(rel_id)
-          self.join_outer_rings(rel)
+        # outer = self.outer_ring(rel)
+        print(rel.geojson())
+        # print('Made outer GEOM:')
+        # print(outer)
+        # if rel['id'] == 6653142:
+        #   IPython.embed()
         return (True, rel)
       else:
         return (True, None)

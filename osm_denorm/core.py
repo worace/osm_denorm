@@ -2,11 +2,10 @@ import json
 import osmium as o
 import sys
 import IPython
-from osm_denorm.counters import Counters
-from osm_denorm.pending_multipoly_cache import PendingMultipolyCache
-import osm_denorm.util as util
+from counters import Counters
+from pending_multipoly_cache import PendingMultipolyCache
+import util
 import pprint
-
 
 BUILDING_TAG='building'
 # HIGHWAY_TAGS = [motorway trunk primary secondary tertiary
@@ -75,9 +74,9 @@ class OSMHandler(o.SimpleHandler):
     if is_multipoly_member and completed_rel:
       self.geom_handler.completed_geometry({'type': 'polygon',
                                             'osm_entity': 'rel',
-                                            'osm_id': completed_rel['id'],
-                                            'tags': completed_rel['tags'],
-                                            'geometry': util.geojson_rel(completed_rel)})
+                                            'osm_id': completed_rel.id,
+                                            'tags': completed_rel.tags,
+                                            'geometry': completed_rel.geojson()})
     elif not is_multipoly_member and w.is_closed() and tags.get('building'):
       self.geom_handler.completed_geometry({'type': 'polygon',
                                             'osm_entity': 'way',
@@ -88,7 +87,8 @@ class OSMHandler(o.SimpleHandler):
 class GeometryHandler(object):
   def completed_geometry(self, geom):
     # print(json.dumps(util.geojson_way(w)))
-    print(geom)
+    print('completed geom %s' % geom['type'])
+    # print(geom)
 
   def run_complete(self):
     print('run complete')
@@ -98,11 +98,13 @@ if __name__ == "__main__":
   if not sys.argv[1]:
     print("*** Error: Must provide path to OSM PBF file as argument ***")
     exit(1)
-  handler = denormalize_osm_file(sys.argv[1])
-  handler.counters.display()
-  pp = pprint.PrettyPrinter(indent=4)
-  way = handler.mp_cache.pending_multipolys[286293]['ways'][42341428]
-  rel = handler.mp_cache.pending_multipolys[286293]
+  osm_file = sys.argv[1]
+  handler = GeometryHandler()
+  # handler.counters.display()
+  OSMHandler.run(osm_file, handler)
+  # pp = pprint.PrettyPrinter(indent=4)
+  # way = handler.mp_cache.pending_multipolys[286293]['ways'][42341428]
+  # rel = handler.mp_cache.pending_multipolys[286293]
 
 # Read 1
 # For multipolygon relations:
