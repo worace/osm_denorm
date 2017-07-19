@@ -1,4 +1,7 @@
 import util
+import IPython
+import shapely.geometry as shapely
+from shapely.ops import linemerge
 
 WAY_TYPE = 'w'
 
@@ -7,6 +10,7 @@ class WayMember(object):
     self.pending_way = way
     self.rel = rel
     self.way = None
+    self.role = self.pending_way.role
 
   def is_complete(self):
     return self.way != None
@@ -15,9 +19,12 @@ class WayMember(object):
   def id(self):
     return self.pending_way.ref
 
-  @property
-  def role(self):
-    return self.pending_way.role
+  # @property
+  # def role(self):
+  #   try:
+  #     return self.pending_way.role
+  #   except UnicodeDecodeError:
+  #     return 'Unknown'
 
   def is_outer(self):
     return self.role == 'outer'
@@ -34,8 +41,8 @@ class RelWrapper(object):
     self.tags = util.tags_dict(self.rel)
     self.id = self.rel.id
 
-  def add_way(self, way):
-    self.ways.append(way)
+  def has_ways(self):
+    return len(self.outer_ways()) > 0
 
   def way_members(self):
     return filter(lambda m: m.type == WAY_TYPE, self.rel.members)
@@ -58,11 +65,45 @@ class RelWrapper(object):
   def add_way_to_member(self, way):
     self.members_index[way.id].way = way
 
+  def joined_outer_ring(self):
+    outer_ring = [] #2d array of geoms
+    # TODO: Prune overlapping points when appending a ring section
+    # or: add shapely for combining geometries
+    for w in self.outer_ways():
+      inserted = False
+      new_segment = util.linestring(w.way)
+      for index, linestring in enumerate(outer_ring):
+        if linestring[-1] == new_segment[0]:
+          outer_ring.insert(index + 1, new_segment)
+          inserted = True
+        elif new_segment[-1] == linestring[0]:
+          outer_ring.insert(index, new_segment)
+          inserted = True
+      if not inserted:
+        outer_ring.append(new_segment)
+    merged = linemerge([shapely.LineString(segment) for segment in outer_ring])
+    if merged.is_closed and merged.is_valid:
+      return shapely.LinearRing(merged)
+    else:
+      # IPython.embed()
+      # could be multipolygon with 2 non-touching outer rings
+      # TODO: Split those
+      print('found rel with multiple closed outer rings: %d' % self.id)
+      return None
+
+  def outer_ring_contains_multiple_ways(self):
+    return len(self.outer_ways()) > 1
+
   def outer_ring(self):
-    "..."
+    if self.outer_ring_contains_multiple_ways():
+      return self.joined_outer_ring()
+    else:
+      coords = util.linestring(self.outer_ways()[0].way)
+      return shapely.LinearRing(coords)
 
   def inner_rings(self):
-    "..."
+    return []
 
   def geojson(self):
-    "..."
+    print(self.has_ways())
+    return [self.outer_ring()] + self.inner_rings()

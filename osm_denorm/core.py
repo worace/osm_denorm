@@ -14,8 +14,6 @@ BUILDING_TAG='building'
 class OSMHandler(o.SimpleHandler):
   @staticmethod
   def run(osm_file, geometry_handler, index_type = 'sparse_mem_array'):
-    print('index_type:')
-    print(index_type)
     idx = o.index.create_map(index_type)
     lh = o.NodeLocationsForWays(idx)
     lh.ignore_errors()
@@ -26,6 +24,9 @@ class OSMHandler(o.SimpleHandler):
     o.apply(relations_pass_reader, lh, handler)
     relations_pass_reader.close()
 
+    handler.receive_rels = False
+
+    # flags = o.osm.osm_entity_bits.WAY | o.osm.osm_entity_bits.NODE
     full_pass_reader = o.io.Reader(osm_file, o.osm.osm_entity_bits.ALL)
     o.apply(full_pass_reader, lh, handler)
     full_pass_reader.close()
@@ -38,6 +39,7 @@ class OSMHandler(o.SimpleHandler):
 
     self.counters = Counters()
     self.mp_cache = PendingMultipolyCache()
+    self.receive_rels = True
 
   def area(self, a):
     print('got an area:')
@@ -45,14 +47,14 @@ class OSMHandler(o.SimpleHandler):
 
   def node(self, n):
     nodes = self.counters.inc('nodes')
-    if nodes % 100000 == 0:
+    if nodes % 1000 == 0:
       print("Processed %d nodes" % nodes)
 
   def relation(self, r):
     self.counters.inc('rels')
-    if self.counters.get('rels') % 100000 == 0:
+    if self.counters.get('rels') % 1000 == 0:
       print("Processed %d rels" % self.counters.get('rels'))
-    if self.mp_cache.consider_rel(r):
+    if self.receive_rels and self.mp_cache.consider_rel(r):
       self.counters.inc('rels.multipolygon')
 
   def geom(self, way):
@@ -64,7 +66,7 @@ class OSMHandler(o.SimpleHandler):
 
   def way(self, w):
     ways = self.counters.inc('ways')
-    if ways % 100000 == 0:
+    if ways % 1000 == 0:
       print("Processed %d ways" % ways)
     tags = util.tags_dict(w)
     if tags.get('building'):
@@ -72,6 +74,8 @@ class OSMHandler(o.SimpleHandler):
       self.counters.inc('building_counts.' + building_type)
     is_multipoly_member, completed_rel = self.mp_cache.consider_way(w)
     if is_multipoly_member and completed_rel:
+      print('completed rel:')
+      print(completed_rel)
       self.geom_handler.completed_geometry({'type': 'polygon',
                                             'osm_entity': 'rel',
                                             'osm_id': completed_rel.id,
@@ -125,6 +129,5 @@ if __name__ == "__main__":
 
 # handler.counters.set('multipoly_way_ids_set.mb', sys.getsizeof(handler.ways_for_pending_multipolys) / 1000000)
 # handler.counters.set('pending_multipolys.mb', sys.getsizeof(handler.pending_multipolys) / 1000000)
-# IPython.embed()
 # pp.pprint(handler.mp_cache.pending_multipolys)
 # pp.pprint(handler.mp_cache.ways_to_rels)
