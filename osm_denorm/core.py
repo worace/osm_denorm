@@ -6,6 +6,7 @@ from counters import Counters
 from pending_multipoly_cache import PendingMultipolyCache
 import util
 import pprint
+import shapely
 
 BUILDING_TAG='building'
 # HIGHWAY_TAGS = [motorway trunk primary secondary tertiary
@@ -82,7 +83,7 @@ class OSMHandler(o.SimpleHandler):
                                             'osm_entity': 'rel',
                                             'osm_id': completed_rel.id,
                                             'tags': completed_rel.tags,
-                                            'geometry': completed_rel.geojson()})
+                                            'geometry': completed_rel.geometry()})
     elif not is_multipoly_member and w.is_closed() and tags.get('building'):
       self.geom_handler.completed_geometry({'type': 'polygon',
                                             'osm_entity': 'way',
@@ -94,7 +95,9 @@ class GeometryHandler(object):
   def completed_geometry(self, geom):
     # print(json.dumps(util.geojson_way(w)))
     if geom['osm_entity'] == 'rel':
-      print(geom)
+      if geom['geometry']:
+        print(geom)
+        print(json.dumps(shapely.geometry.mapping(geom['geometry'])))
 
   def run_complete(self):
     print('run complete')

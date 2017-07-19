@@ -90,8 +90,12 @@ class RelWrapper(object):
       return shapely.LinearRing(coords)
 
   def inner_rings(self):
-    return []
+    return [shapely.LinearRing(util.linestring(member.way)) for member in self.inner_ways()]
 
-  def geojson(self):
-    print(self.has_ways())
-    return [self.outer_ring()] + self.inner_rings()
+  def geometry(self):
+    outer = self.outer_ring()
+    inner = self.inner_rings()
+    if outer == None:
+      return None
+    else:
+      return shapely.Polygon(outer, inner)
