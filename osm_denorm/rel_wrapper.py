@@ -106,3 +106,10 @@ class RelWrapper(object):
       return None
     else:
       return shapely.Polygon(outer, inner)
+
+  def as_dict(self):
+    return {'type': 'polygon',
+            'osm_entity': 'rel',
+            'osm_id': self.id,
+            'tags': self.tags,
+            'geometry': shapely.mapping(self.geometry())}

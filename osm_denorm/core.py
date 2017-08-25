@@ -85,31 +85,24 @@ class OSMHandler(o.SimpleHandler):
     is_multipoly_member, completed_rel = self.mp_cache.consider_way(way)
 
     if is_multipoly_member and completed_rel:
-      self.geom_handler.completed_geometry({'type': 'polygon',
-                                            'osm_entity': 'rel',
-                                            'osm_id': completed_rel.id,
-                                            'tags': completed_rel.tags,
-                                            'geometry': completed_rel.geometry()})
+      self.geom_handler.completed_entity(completed_rel.as_dict())
       self.mp_cache.remove_rel(completed_rel)
     elif not is_multipoly_member and way.is_building() and way.is_polygon():
-      self.geom_handler.completed_geometry({'type': 'polygon',
-                                            'osm_entity': 'way',
-                                            'osm_id': way.id,
-                                            'tags': way.tags,
-                                            'geometry': way.geometry})
+      self.geom_handler.completed_entity(way.as_dict())
 
 class GeometryHandler(object):
   def __init__(self):
     self.completed_ways = 0
     self.completed_rels = 0
 
-  def completed_geometry(self, geom):
+  def completed_entity(self, geom):
     if geom['osm_entity'] == 'rel' and geom['geometry']:
       if self.completed_rels % 10000 == 0: print('rels: %d' % self.completed_rels)
       self.completed_rels += 1
-    if geom['osm_entity'] == 'way' and geom['geometry']:
+    if geom['osm_entity'] == 'way':
       if self.completed_ways % 10000 == 0: print('ways: %d' % self.completed_ways)
       self.completed_ways += 1
+    print(json.dumps(geom))
 
   def run_complete(self):
     print('run complete')

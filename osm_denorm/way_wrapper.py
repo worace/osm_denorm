@@ -21,3 +21,10 @@ class WayWrapper(object):
 
   def is_polygon(self):
     return self.geometry and self.geometry.is_valid and self.geometry.is_closed
+
+  def as_dict(self):
+    return {'type': 'polygon',
+            'osm_entity': 'way',
+            'osm_id': self.id,
+            'tags': self.tags,
+            'geometry': shapely.mapping(shapely.Polygon(self.geometry))}
