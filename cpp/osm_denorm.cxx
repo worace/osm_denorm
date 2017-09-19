@@ -11,6 +11,7 @@
 #include <osmium/handler.hpp>
 #include <osmium/visitor.hpp>
 #include <osmium/relations/relations_manager.hpp>
+#include <osmium/geom/factory.hpp>
 #include <osmium/geom/geojson.hpp>
 
 class WayHandler : public osmium::handler::Handler {
@@ -22,14 +23,15 @@ public:
           // std::cout << n.ref() << ": " << n.lon() << ", " << n.lat() << '\n';
         }
         std::cout << "way " << way.id() << " with " << node_count << " nodes" << '\n';
-        osmium::geom::GeoJSONFactory<> factory{};
+        // osmium::geom::GeoJSONFactory<> factory{};
         if (way.is_closed()) {
           std::cout << "*** POLYGON ***" << '\n';
-          std::string json = factory.create_polygon(way);
-          std::cout << json << '\n';
+          // std::string json = factory.create_polygon(way);
+          // std::cout << json << '\n';
         } else {
-          std::string json = factory.create_linestring(way);
-          std::cout << json << '\n';
+          std::cout << "*** LineString ***" << '\n';
+          // std::string json = factory.create_linestring(way);
+          // std::cout << json << '\n';
         }
 
     }
@@ -114,7 +116,7 @@ void process_relations(std::string input_path) {
 int main (int argc, char *argv[])
 {
   std::string input = "../tests/dc_sample.pbf";
-  process_ways_with_handler(input);
-  // process_relations(input);
+  // process_ways_with_handler(input);
+  process_relations(input);
   return 0;
 }
