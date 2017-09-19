@@ -1,1 +1,0 @@
-/Applications/Xcode.app/Contents/Developer/usr/bin/g++    -lpthread -lz -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/osmdenorm.dir/osm_denorm.cxx.o  -o osmdenorm  
