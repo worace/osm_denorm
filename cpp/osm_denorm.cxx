@@ -26,7 +26,9 @@
 //rapidjson
 #include <rapidjson/writer.h>
 #include <rapidjson/stringbuffer.h>
+#include <rapidjson/document.h>
 #include <osmium/geom/rapid_geojson.hpp>
+#include <osmium/geom/rapid_geojson_document.hpp>
 
 class WayHandler : public osmium::handler::Handler {
 public:
@@ -221,21 +223,24 @@ public: explicit CustomMPHandler(osmium::area::Assembler::config_type assembler_
 };
 
 class GeoJSONHandler : public osmium::handler::Handler {
-  // osmium::geom::GeoJSONFactory<> m_factory{};
-  typedef rapidjson::Writer<rapidjson::StringBuffer> writer_type;
-  rapidjson::StringBuffer stream;
-  writer_type writer{stream};
-  osmium::geom::RapidGeoJSONFactory<writer_type> m_factory{writer};
+    osmium::geom::RapidGeoJSONDocumentFactory<> m_factory;
 
 public:
+    std::string json_string(rapidjson::Document& document) {
+        rapidjson::StringBuffer stream;
+        rapidjson::Writer<rapidjson::StringBuffer> writer(stream);
+        document.Accept(writer);
+        return stream.GetString();
+    }
+
+
     void area(const osmium::Area& area) {
         try {
-            std::cout << "*** Completed Area ***" << '\n';
-            m_factory.create_multipolygon(area);
-            const char* output = stream.GetString();
-            std::cout << output << "\n";
+            std::cerr << "*** Completed Area ***" << '\n';
+            rapidjson::Document doc = m_factory.create_multipolygon(area);
+            std::cout << json_string(doc) << "\n";
         } catch (const osmium::geometry_error& e) {
-            std::cout << "GEOMETRY ERROR: " << e.what() << "\n";
+            std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
         }
     }
 
@@ -243,27 +248,18 @@ public:
         try {
             if (way.is_closed()) {
               // TODO: Don't work for some reason:
-              // std::cout << m_factory.create_polygon(way) << "\n";
-              std::cout << "*** WAY Polygon ***" << '\n';
-              // std::cout << m_factory.create_linestring(way) << "\n";
-
-              m_factory.create_polygon(way);
-              const char* output = stream.GetString();
-              std::cout << output << "\n";
+              std::cerr << "*** Way Polygon ***" << '\n';
+              rapidjson::Document doc = m_factory.create_polygon(way);
+              std::cout << json_string(doc) << "\n";
             } else {
-              std::cout << "*** WAY LINESTRING ***" << '\n';
-              // std::cout << m_factory.create_linestring(way) << "\n";
-              m_factory.create_linestring(way);
-              std::cout << "*** get output... ***" << '\n';
-              const char* output = stream.GetString();
-              std::cout << "*** print output...... ***" << '\n';
-              std::cout << output << "\n";
+              std::cerr << "*** WAY LINESTRING ***" << '\n';
+              rapidjson::Document doc = m_factory.create_linestring(way);
+              std::cout << json_string(doc) << "\n";
             }
         } catch (const osmium::geometry_error& e) {
-            std::cout << "GEOMETRY ERROR: " << e.what() << "\n";
+            std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
         }
     }
-
 };
 
 class WKTHandler : public osmium::handler::Handler {
