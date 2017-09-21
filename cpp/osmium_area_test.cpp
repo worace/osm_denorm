@@ -67,18 +67,12 @@ using location_handler_type = osmium::handler::NodeLocationsForWays<index_type>;
 
 // This handler writes all area geometries out in WKT (Well Known Text) format.
 class WKTDump : public osmium::handler::Handler {
-
-    // This factory is used to create a geometry in WKT format from OSM
-    // objects. The template parameter is empty here, because we output WGS84
-    // coordinates, but could be used for a projection.
     osmium::geom::WKTFactory<> m_factory;
-
 public:
-
-    // This callback is called by osmium::apply for each area in the data.
     void area(const osmium::Area& area) {
         try {
-            std::cout << m_factory.create_multipolygon(area) << "\n";
+            // std::cout << "*** Completed Area ***" << '\n';
+            // std::cout << m_factory.create_multipolygon(area) << "\n";
         } catch (const osmium::geometry_error& e) {
             std::cout << "GEOMETRY ERROR: " << e.what() << "\n";
         }

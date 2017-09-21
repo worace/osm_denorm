@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <osmium/osm/types.hpp>
 #include <osmium/osm/node.hpp>
+#include <osmium/index/map/flex_mem.hpp>
 #include <osmium/osm/way.hpp>
 #include <osmium/osm/location.hpp>
 #include <osmium/io/gzip_compression.hpp>
@@ -10,9 +11,22 @@
 #include <osmium/handler/node_locations_for_ways.hpp>
 #include <osmium/handler.hpp>
 #include <osmium/visitor.hpp>
+#include <osmium/osm/relation.hpp>
 #include <osmium/relations/relations_manager.hpp>
+#include <osmium/relations/manager_util.hpp>
+#include <osmium/relations/members_database.hpp>
+#include <osmium/relations/relations_database.hpp>
 #include <osmium/geom/factory.hpp>
 #include <osmium/geom/geojson.hpp>
+#include <osmium/area/assembler.hpp>
+#include <osmium/area/multipolygon_manager.hpp>
+// For the WKT factory
+#include <osmium/geom/wkt.hpp>
+
+//rapidjson
+#include <rapidjson/writer.h>
+#include <rapidjson/stringbuffer.h>
+#include <osmium/geom/rapid_geojson.hpp>
 
 class WayHandler : public osmium::handler::Handler {
 public:
@@ -113,10 +127,211 @@ void process_relations(std::string input_path) {
   reader.close();
 }
 
+class CustomRelHandler : public osmium::relations::RelationsManager<CustomRelHandler, false, true, false> {
+  const osmium::area::Assembler::config_type m_assembler_config;
+  const osmium::TagsFilter m_filter = osmium::TagsFilter{true};
+public: explicit CustomRelHandler(){}
+  bool new_relation(const osmium::Relation& relation) const {
+    const char* type = relation.tags().get_value_by_key("type");
+
+    // ignore relations without "type" tag
+    if (type == nullptr) {
+      return false;
+    }
+
+    if (((!std::strcmp(type, "multipolygon")) || (!std::strcmp(type, "boundary"))) && osmium::tags::match_any_of(relation.tags(), m_filter)) {
+      return std::any_of(relation.members().cbegin(), relation.members().cend(), [](const osmium::RelationMember& member) {
+          return member.type() == osmium::item_type::way;
+        });
+    }
+
+    return false;
+  }
+
+  void complete_relation(const osmium::Relation& relation) {
+    std::vector<const osmium::Way*> ways;
+    ways.reserve(relation.members().size());
+    for (const auto& member : relation.members()) {
+      if (member.ref() != 0) {
+        ways.push_back(this->get_member_way(member.ref()));
+        assert(ways.back() != nullptr);
+      }
+    }
+
+    try {
+      osmium::area::Assembler assembler{m_assembler_config};
+      assembler(relation, ways, this->buffer());
+      // m_stats += assembler.stats();
+    } catch (const osmium::invalid_location&) {
+      // XXX ignore
+    }
+  }
+
+  void after_way(const osmium::Way& way) {
+    // you need at least 4 nodes to make up a polygon
+    if (way.nodes().size() <= 3) {
+      return;
+    }
+
+    try {
+      if (!way.nodes().front().location() || !way.nodes().back().location()) {
+        throw osmium::invalid_location{"invalid location"};
+      }
+      if (way.ends_have_same_location()) {
+        if (way.tags().has_tag("area", "no")) {
+          return;
+        }
+
+        if (osmium::tags::match_none_of(way.tags(), m_filter)) {
+          return;
+        }
+
+        osmium::area::Assembler assembler{m_assembler_config};
+        assembler(way, this->buffer());
+        // m_stats += assembler.stats();
+        this->possibly_flush();
+      }
+    } catch (const osmium::invalid_location&) {
+      // XXX ignore
+    }
+  }
+
+  void way_not_in_any_relation(const osmium::Way& way) {
+    // TODO: tag filtering etc
+    this->buffer().add_item(way);
+    this->possibly_flush();
+  }
+
+};
+
+class CustomMPHandler : public osmium::area::MultipolygonManager<osmium::area::Assembler> {
+public: explicit CustomMPHandler(osmium::area::Assembler::config_type assembler_config,
+                                 osmium::TagsFilter filter = osmium::TagsFilter{true}) :
+    osmium::area::MultipolygonManager<osmium::area::Assembler>(assembler_config, filter) {}
+
+  void way_not_in_any_relation(const osmium::Way& way) {
+    std::cout << "way not in rel" << '\n';
+    fprintf(stdout,"Way not in any relation %lld\n", way.id());
+  }
+
+  void after_way(const osmium::Way& way) {
+    std::cout << "after way" << '\n';
+    fprintf(stdout,"After Way... %lld\n", way.id());
+  }
+};
+
+class GeoJSONHandler : public osmium::handler::Handler {
+  // osmium::geom::GeoJSONFactory<> m_factory{};
+  typedef rapidjson::Writer<rapidjson::StringBuffer> writer_type;
+  rapidjson::StringBuffer stream;
+  writer_type writer{stream};
+  osmium::geom::RapidGeoJSONFactory<writer_type> m_factory{writer};
+
+public:
+    void area(const osmium::Area& area) {
+        try {
+            std::cout << "*** Completed Area ***" << '\n';
+            m_factory.create_multipolygon(area);
+            const char* output = stream.GetString();
+            std::cout << output << "\n";
+        } catch (const osmium::geometry_error& e) {
+            std::cout << "GEOMETRY ERROR: " << e.what() << "\n";
+        }
+    }
+
+    void way(const osmium::Way& way) {
+        try {
+            if (way.is_closed()) {
+              // TODO: Don't work for some reason:
+              // std::cout << m_factory.create_polygon(way) << "\n";
+              std::cout << "*** WAY Polygon ***" << '\n';
+              // std::cout << m_factory.create_linestring(way) << "\n";
+
+              m_factory.create_polygon(way);
+              const char* output = stream.GetString();
+              std::cout << output << "\n";
+            } else {
+              std::cout << "*** WAY LINESTRING ***" << '\n';
+              // std::cout << m_factory.create_linestring(way) << "\n";
+              m_factory.create_linestring(way);
+              std::cout << "*** get output... ***" << '\n';
+              const char* output = stream.GetString();
+              std::cout << "*** print output...... ***" << '\n';
+              std::cout << output << "\n";
+            }
+        } catch (const osmium::geometry_error& e) {
+            std::cout << "GEOMETRY ERROR: " << e.what() << "\n";
+        }
+    }
+
+};
+
+class WKTHandler : public osmium::handler::Handler {
+  osmium::geom::WKTFactory<> m_factory{};
+public:
+    void area(const osmium::Area& area) {
+        try {
+            std::cout << "*** Completed Area ***" << '\n';
+            std::cout << m_factory.create_multipolygon(area) << "\n";
+        } catch (const osmium::geometry_error& e) {
+            std::cout << "GEOMETRY ERROR: " << e.what() << "\n";
+        }
+    }
+
+    void way(const osmium::Way& way) {
+        try {
+            if (way.is_closed()) {
+              std::cout << "*** WAY POLYGON ***" << '\n';
+              std::cout << m_factory.create_linestring(way) << "\n";
+            } else {
+              std::cout << "*** WAY LINESTRING ***" << '\n';
+              std::cout << m_factory.create_linestring(way) << "\n";
+            }
+        } catch (const osmium::geometry_error& e) {
+            std::cout << "GEOMETRY ERROR: " << e.what() << "\n";
+        }
+    }
+
+};
+
+
+void process_with_multipolys(std::string input_path) {
+  // using index_type = osmium::index::map::SparseMemArray<osmium::unsigned_object_id_type, osmium::Location>;
+  using index_type = osmium::index::map::FlexMem<osmium::unsigned_object_id_type, osmium::Location>;
+  using location_handler_type = osmium::handler::NodeLocationsForWays<index_type>;
+
+  osmium::io::File input_file{input_path};
+  osmium::area::Assembler::config_type assembler_config;
+
+  // CustomMPHandler mp_manager{assembler_config};
+  CustomRelHandler mp_manager;
+
+  std::cerr << "Pass 1...\n";
+  osmium::relations::read_relations(input_file, mp_manager);
+
+  std::cerr << "Memory:\n";
+  osmium::relations::print_used_memory(std::cerr, mp_manager.used_memory());
+
+  std::cerr << "Pass 2...\n";
+  index_type index;
+  location_handler_type location_handler{index};
+  location_handler.ignore_errors();
+
+  GeoJSONHandler handler;
+  osmium::io::Reader reader{input_file};
+  osmium::apply(reader, location_handler,
+                mp_manager.handler([&handler](osmium::memory::Buffer&& buffer) {
+                    osmium::apply(buffer, handler);
+                  }));
+  reader.close();
+  std::cerr << "Pass 2 done\n";
+}
+
 int main (int argc, char *argv[])
 {
   std::string input = "../tests/dc_sample.pbf";
   // process_ways_with_handler(input);
-  process_relations(input);
+  // process_relations(input);
+  process_with_multipolys(input);
   return 0;
 }
