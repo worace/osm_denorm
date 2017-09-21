@@ -131,8 +131,21 @@ void process_relations(std::string input_path) {
 
 class CustomRelHandler : public osmium::relations::RelationsManager<CustomRelHandler, false, true, false> {
     const osmium::area::Assembler::config_type m_assembler_config;
-    const osmium::TagsFilter m_filter = osmium::TagsFilter{true};
-public: explicit CustomRelHandler(){}
+    osmium::TagsFilter m_filter = osmium::TagsFilter{false};
+
+public: explicit CustomRelHandler(){
+    std::vector<std::string> top_level_tags = {"aeroway", "amenity", "building",
+                                               "religion", "shop", "sport", "leisure"};
+    std::vector<std::string> highway_tags = {"motorway", "trunk", "primary", "secondary",
+                                             "tertiary", "unclassified", "residential",
+                                             "motorway_link", "trunk_link", "primary_link"};
+    for (const auto& tag : top_level_tags) {
+        m_filter.add_rule(true, osmium::TagMatcher{tag});
+    }
+    for (const auto& tag : highway_tags) {
+        m_filter.add_rule(true, osmium::TagMatcher{"highway", tag});
+    }
+}
     bool new_relation(const osmium::Relation& relation) const {
         const char* type = relation.tags().get_value_by_key("type");
 
@@ -199,9 +212,10 @@ public: explicit CustomRelHandler(){}
     }
 
     void way_not_in_any_relation(const osmium::Way& way) {
-        // TODO: tag filtering etc
-        this->buffer().add_item(way);
-        this->possibly_flush();
+        if (osmium::tags::match_any_of(way.tags(), m_filter)) {
+            this->buffer().add_item(way);
+            this->possibly_flush();
+        }
     }
 
 };
@@ -217,29 +231,43 @@ public:
         return stream.GetString();
     }
 
+    rapidjson::Document feature(rapidjson::Document& geometry, osmium::OSMObject& entity) {
+        rapidjson::Document feature;
+        rapidjson::Document::AllocatorType& allocator = feature.GetAllocator();
+        feature.SetObject();
+        feature.AddMember("type", "Feature", allocator);
 
-    void area(const osmium::Area& area) {
+        rapidjson::Value properties(rapidjson::kObjectType);
+        properties.AddMember("id", entity.id(), allocator);
+
+        feature.AddMember("geometry", geometry, allocator);
+
+        rapidjson::Value tags(rapidjson::kObjectType);
+        for (const auto& tag : entity.tags()) {
+            tags.AddMember(rapidjson::Value(tag.key(), allocator),
+                           rapidjson::Value(tag.value(), allocator),
+                           allocator);
+        }
+        properties.AddMember("tags", tags, allocator);
+        feature.AddMember("properties", properties, allocator);
+        return feature;
+    }
+
+    void area(osmium::Area& area) {
         try {
-            std::cerr << "*** Completed Area ***" << '\n';
-            rapidjson::Document doc = m_factory.create_multipolygon(area);
+            rapidjson::Document geom = m_factory.create_multipolygon(area);
+            rapidjson::Document doc = feature(geom, area);
             std::cout << json_string(doc) << "\n";
         } catch (const osmium::geometry_error& e) {
             std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
         }
     }
 
-    void way(const osmium::Way& way) {
+    void way(osmium::Way& way) {
         try {
-            if (way.is_closed()) {
-                // TODO: Don't work for some reason:
-                std::cerr << "*** Way Polygon ***" << '\n';
-                rapidjson::Document doc = m_factory.create_polygon(way);
-                std::cout << json_string(doc) << "\n";
-            } else {
-                std::cerr << "*** WAY LINESTRING ***" << '\n';
-                rapidjson::Document doc = m_factory.create_linestring(way);
-                std::cout << json_string(doc) << "\n";
-            }
+            rapidjson::Document geom = way.is_closed() ? m_factory.create_polygon(way) : m_factory.create_linestring(way);
+            rapidjson::Document doc = feature(geom, way);
+            std::cout << json_string(doc) << "\n";
         } catch (const osmium::geometry_error& e) {
             std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
         }
@@ -280,7 +308,14 @@ void process_with_multipolys(std::string input_path) {
 
 int main (int argc, char *argv[])
 {
-    std::string input = "../tests/dc_sample.pbf";
+    std::string input;
+    if (argc < 2) {
+        input = "../tests/dc_sample.pbf";
+    } else {
+        input = argv[1];
+    }
+    std::cerr << "Read File:" << input << "\n";
+
     // process_ways_with_handler(input);
     // process_relations(input);
     process_with_multipolys(input);
