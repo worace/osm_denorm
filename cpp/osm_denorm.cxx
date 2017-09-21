@@ -206,22 +206,6 @@ public: explicit CustomRelHandler(){}
 
 };
 
-class CustomMPHandler : public osmium::area::MultipolygonManager<osmium::area::Assembler> {
-public: explicit CustomMPHandler(osmium::area::Assembler::config_type assembler_config,
-                                 osmium::TagsFilter filter = osmium::TagsFilter{true}) :
-    osmium::area::MultipolygonManager<osmium::area::Assembler>(assembler_config, filter) {}
-
-  void way_not_in_any_relation(const osmium::Way& way) {
-    std::cout << "way not in rel" << '\n';
-    fprintf(stdout,"Way not in any relation %lld\n", way.id());
-  }
-
-  void after_way(const osmium::Way& way) {
-    std::cout << "after way" << '\n';
-    fprintf(stdout,"After Way... %lld\n", way.id());
-  }
-};
-
 class GeoJSONHandler : public osmium::handler::Handler {
     osmium::geom::RapidGeoJSONDocumentFactory<> m_factory;
 
@@ -261,35 +245,6 @@ public:
         }
     }
 };
-
-class WKTHandler : public osmium::handler::Handler {
-  osmium::geom::WKTFactory<> m_factory{};
-public:
-    void area(const osmium::Area& area) {
-        try {
-            std::cout << "*** Completed Area ***" << '\n';
-            std::cout << m_factory.create_multipolygon(area) << "\n";
-        } catch (const osmium::geometry_error& e) {
-            std::cout << "GEOMETRY ERROR: " << e.what() << "\n";
-        }
-    }
-
-    void way(const osmium::Way& way) {
-        try {
-            if (way.is_closed()) {
-              std::cout << "*** WAY POLYGON ***" << '\n';
-              std::cout << m_factory.create_linestring(way) << "\n";
-            } else {
-              std::cout << "*** WAY LINESTRING ***" << '\n';
-              std::cout << m_factory.create_linestring(way) << "\n";
-            }
-        } catch (const osmium::geometry_error& e) {
-            std::cout << "GEOMETRY ERROR: " << e.what() << "\n";
-        }
-    }
-
-};
-
 
 void process_with_multipolys(std::string input_path) {
   // using index_type = osmium::index::map::SparseMemArray<osmium::unsigned_object_id_type, osmium::Location>;
