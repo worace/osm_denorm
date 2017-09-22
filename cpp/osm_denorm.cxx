@@ -8,6 +8,8 @@
 #include <osmium/io/gzip_compression.hpp>
 #include <osmium/io/pbf_input.hpp>
 #include <osmium/index/map/sparse_mem_array.hpp>
+#include <osmium/index/map/dense_file_array.hpp>
+#include <osmium/index/map/sparse_file_array.hpp>
 #include <osmium/handler/node_locations_for_ways.hpp>
 #include <osmium/handler.hpp>
 #include <osmium/visitor.hpp>
@@ -275,8 +277,16 @@ public:
 };
 
 void process_with_multipolys(std::string input_path) {
+    // const int fd = ::open("/tmp/osm_index", O_RDWR | O_CREAT | O_TRUNC, 0666);
+    // if (fd == -1) {
+    //     std::cerr << "Can not open location cache file " << std::strerror(errno) << "\n";
+    //     std::exit(1);
+    // }
+
     // using index_type = osmium::index::map::SparseMemArray<osmium::unsigned_object_id_type, osmium::Location>;
     using index_type = osmium::index::map::FlexMem<osmium::unsigned_object_id_type, osmium::Location>;
+    // using index_type = osmium::index::map::DenseFileArray<osmium::unsigned_object_id_type, osmium::Location>;
+    // using index_type = osmium::index::map::SparseFileArray<osmium::unsigned_object_id_type, osmium::Location>;
     using location_handler_type = osmium::handler::NodeLocationsForWays<index_type>;
 
     osmium::io::File input_file{input_path};
