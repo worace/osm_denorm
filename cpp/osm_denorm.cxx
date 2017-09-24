@@ -136,7 +136,7 @@ public:
         m_writer.StartObject();
         m_writer.String("type");
         m_writer.String("Feature");
-        m_writer.String("geometry");
+        // m_writer.String("geometry");
     }
 
     void end_feature() {
