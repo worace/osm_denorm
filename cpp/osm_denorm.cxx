@@ -29,9 +29,7 @@
 #include <rapidjson/writer.h>
 #include "rapidjson/filewritestream.h"
 #include <rapidjson/stringbuffer.h>
-#include <rapidjson/document.h>
 #include <osmium/geom/rapid_geojson.hpp>
-#include <osmium/geom/rapid_geojson_document.hpp>
 #include <cstdio>
 
 
@@ -186,60 +184,6 @@ public:
             }
             write_properties(way);
             end_feature();
-        } catch (const osmium::geometry_error& e) {
-            std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
-        }
-    }
-};
-
-class GeoJSONHandler : public osmium::handler::Handler {
-    osmium::geom::RapidGeoJSONDocumentFactory<> m_factory;
-
-public:
-    std::string json_string(rapidjson::Document& document) {
-        rapidjson::StringBuffer stream;
-        rapidjson::Writer<rapidjson::StringBuffer> writer(stream);
-        document.Accept(writer);
-        return stream.GetString();
-    }
-
-    rapidjson::Document feature(rapidjson::Document& geometry, osmium::OSMObject& entity) {
-        rapidjson::Document feature;
-        rapidjson::Document::AllocatorType& allocator = feature.GetAllocator();
-        feature.SetObject();
-        feature.AddMember("type", "Feature", allocator);
-
-        rapidjson::Value properties(rapidjson::kObjectType);
-        properties.AddMember("id", entity.id(), allocator);
-
-        feature.AddMember("geometry", geometry, allocator);
-
-        rapidjson::Value tags(rapidjson::kObjectType);
-        for (const auto& tag : entity.tags()) {
-            tags.AddMember(rapidjson::Value(tag.key(), allocator),
-                           rapidjson::Value(tag.value(), allocator),
-                           allocator);
-        }
-        properties.AddMember("tags", tags, allocator);
-        feature.AddMember("properties", properties, allocator);
-        return feature;
-    }
-
-    void area(osmium::Area& area) {
-        try {
-            rapidjson::Document geom = m_factory.create_multipolygon(area);
-            rapidjson::Document doc = feature(geom, area);
-            std::cout << json_string(doc) << "\n";
-        } catch (const osmium::geometry_error& e) {
-            std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
-        }
-    }
-
-    void way(osmium::Way& way) {
-        try {
-            rapidjson::Document geom = way.is_closed() ? m_factory.create_polygon(way) : m_factory.create_linestring(way);
-            rapidjson::Document doc = feature(geom, way);
-            std::cout << json_string(doc) << "\n";
         } catch (const osmium::geometry_error& e) {
             std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
         }
