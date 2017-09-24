@@ -27,109 +27,13 @@
 
 //rapidjson
 #include <rapidjson/writer.h>
+#include "rapidjson/filewritestream.h"
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/document.h>
 #include <osmium/geom/rapid_geojson.hpp>
 #include <osmium/geom/rapid_geojson_document.hpp>
+#include <cstdio>
 
-class WayHandler : public osmium::handler::Handler {
-public:
-    void way(const osmium::Way& way) {
-        int node_count = 0;
-        for (const auto& n : way.nodes()) {
-            node_count++;
-            // std::cout << n.ref() << ": " << n.lon() << ", " << n.lat() << '\n';
-        }
-        std::cout << "way " << way.id() << " with " << node_count << " nodes" << '\n';
-        // osmium::geom::GeoJSONFactory<> factory{};
-        if (way.is_closed()) {
-            std::cout << "*** POLYGON ***" << '\n';
-            // std::string json = factory.create_polygon(way);
-            // std::cout << json << '\n';
-        } else {
-            std::cout << "*** LineString ***" << '\n';
-            // std::string json = factory.create_linestring(way);
-            // std::cout << json << '\n';
-        }
-
-    }
-};
-
-class RelationManager : public osmium::relations::RelationsManager<RelationManager, false, true, false> {
-public : void complete_relation(const osmium::Relation& relation) {
-    // Iterate over all members
-    for (const auto& member : relation.members()) {
-        // member.ref() will be 0 for all members you are not interested
-        // in. The objects for those members are not available.
-        if (member.ref() != 0) {
-            // Get the member object
-            const osmium::OSMObject* obj = this->get_member_object(member);
-            std::cout << "member type: " << obj->type() << "\n";
-
-            // If you know which type you have you can also use any of these:
-            // const osmium::Node* node         = this->get_member_node(member.ref());
-            // const osmium::Way* way           = this->get_member_way(member.ref());
-            // const osmium::Relation* relation = this->get_member_relation(member.ref());
-        }
-    }
-}
-
-    void way_not_in_any_relation(const osmium::Way& way) {
-        fprintf(stdout,"Way not in any relation %lld\n", way.id());
-    }
-};
-
-
-void process_ways_with_handler(std::string input_path) {
-    osmium::io::File input_file{input_path};
-
-    auto otypes = osmium::osm_entity_bits::node | osmium::osm_entity_bits::way;
-
-    osmium::io::Reader reader{input_file, otypes};
-
-    // namespace map = osmium::index::map;
-    using index_type = osmium::index::map::SparseMemArray<osmium::unsigned_object_id_type, osmium::Location>;
-    using location_handler_type = osmium::handler::NodeLocationsForWays<index_type>;
-    index_type index;
-    location_handler_type location_handler{index};
-
-    WayHandler handler;
-    osmium::apply(reader, location_handler, handler);
-    reader.close();
-}
-
-void print_counts() {
-    osmium::io::File input_file{"../tests/dc_sample.pbf"};
-
-    auto otypes = osmium::osm_entity_bits::node | osmium::osm_entity_bits::way;
-
-    osmium::io::Reader reader{input_file, otypes};
-    osmium::io::Header header = reader.header();
-
-    int entities = 0;
-    int buffers = 0;
-
-    while (osmium::memory::Buffer buffer = reader.read()) {
-        buffers++;
-        for (auto& item : buffer) {
-            entities++;
-        }
-    }
-    reader.close();
-
-    fprintf(stdout,"Read %d entities in %d buffers\n", entities, buffers);
-}
-
-void process_relations(std::string input_path) {
-    osmium::io::File input_file{input_path};
-    RelationManager mgr;
-    osmium::relations::read_relations(input_file, mgr);
-    osmium::io::Reader reader{input_file};
-    osmium::apply(reader, mgr.handler());
-
-    // osmium::memory::Buffer = manager.read();
-    reader.close();
-}
 
 class CustomRelHandler : public osmium::relations::RelationsManager<CustomRelHandler, false, true, false> {
     const osmium::area::Assembler::config_type m_assembler_config;
@@ -222,6 +126,72 @@ public: explicit CustomRelHandler(){
 
 };
 
+
+class GeoJSONStreamHandler : public osmium::handler::Handler {
+    FILE* m_fp = stdout;
+    char m_write_buffer[65536];
+    rapidjson::FileWriteStream m_outstream{m_fp, m_write_buffer, sizeof(m_write_buffer)};
+    rapidjson::Writer<rapidjson::FileWriteStream> m_writer{m_outstream};
+    osmium::geom::RapidGeoJSONFactory<rapidjson::Writer<rapidjson::FileWriteStream>> m_factory{m_writer};
+public:
+    void start_feature() {
+        m_writer.StartObject();
+        m_writer.String("type");
+        m_writer.String("Feature");
+        m_writer.String("geometry");
+    }
+
+    void end_feature() {
+        m_writer.EndObject();
+        m_outstream.Put('\n');
+        m_writer.Reset(m_outstream);
+    }
+
+    void write_properties(osmium::OSMObject& entity) {
+        m_writer.String("properties");
+        m_writer.StartObject();
+
+        m_writer.String("id");
+        m_writer.Int(entity.id());
+
+        m_writer.String("tags");
+        m_writer.StartObject();
+        for (const auto& tag : entity.tags()) {
+            m_writer.String(tag.key());
+            m_writer.String(tag.value());
+        }
+        m_writer.EndObject(); // end tags
+
+        m_writer.EndObject(); //end properties
+    }
+
+    void area(osmium::Area& area) {
+        try {
+            start_feature();
+            m_factory.create_multipolygon(area);
+            write_properties(area);
+            end_feature();
+        } catch (const osmium::geometry_error& e) {
+            std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
+        }
+    }
+
+    void way(osmium::Way& way) {
+        try {
+            start_feature();
+            if (way.is_closed()) {
+                m_factory.create_polygon(way);
+            } else {
+                m_factory.create_linestring(way);
+            }
+            write_properties(way);
+            end_feature();
+        } catch (const osmium::geometry_error& e) {
+            std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
+        }
+    }
+};
+
 class GeoJSONHandler : public osmium::handler::Handler {
     osmium::geom::RapidGeoJSONDocumentFactory<> m_factory;
 
@@ -306,7 +276,7 @@ void process_with_multipolys(std::string input_path) {
     location_handler_type location_handler{index};
     location_handler.ignore_errors();
 
-    GeoJSONHandler handler;
+    GeoJSONStreamHandler handler;
     osmium::io::Reader reader{input_file};
     osmium::apply(reader, location_handler,
                   mp_manager.handler([&handler](osmium::memory::Buffer&& buffer) {
@@ -326,8 +296,6 @@ int main (int argc, char *argv[])
     }
     std::cerr << "Read File:" << input << "\n";
 
-    // process_ways_with_handler(input);
-    // process_relations(input);
     process_with_multipolys(input);
     return 0;
 }
