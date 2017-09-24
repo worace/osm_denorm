@@ -15,5 +15,6 @@ For ways:
 
 #+BEGIN_EXAMPLE
 sudo apt-get install -y cmake cmake-curses-gui make \
-    libexpat1-dev zlib1g-dev libbz2-dev libprotozero-dev libosmium-dev rapidjson-dev
+    libexpat1-dev zlib1g-dev libbz2-dev libprotozero-dev libosmium-dev rapidjson-dev \
+    libpthread-stubs0-dev
 #+END_EXAMPLE
