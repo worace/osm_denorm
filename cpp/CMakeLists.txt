@@ -11,7 +11,8 @@ endif()
 set (CMAKE_CXX_STANDARD 11)
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -lpthread -lz")
 
-include_directories(${OSMIUM_INCLUDE_DIRS})
+# include_directories(${OSMIUM_INCLUDE_DIRS})
+include_directories("/usr/include")
 
 add_executable(osmdenorm osm_denorm.cxx)
-add_executable(osmium_example osmium_area_test.cpp)
+# add_executable(osmium_example osmium_area_test.cpp)

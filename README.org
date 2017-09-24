@@ -11,3 +11,9 @@ For ways:
 ** Handling Completed Multipolygons
  * If there are multiple ways with role "outer", need to combine them into a single linear ring
  * Then build a polygon with 1 outer and 0 or more inner rings (for geojson first ring is outer, all subsequent are inner)
+* Deps
+
+#+BEGIN_EXAMPLE
+sudo apt-get install -y cmake cmake-curses-gui make \
+    libexpat1-dev zlib1g-dev libbz2-dev libprotozero-dev libosmium-dev rapidjson-dev
+#+END_EXAMPLE
