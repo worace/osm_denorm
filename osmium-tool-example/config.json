@@ -1,0 +1,11 @@
+{
+  "linear_tags": ["highway"],
+  "area_tags": ["aeroway", "amenity", "building",
+                "religion", "shop", "sport", "leisure"],
+  "include_tags": ["aeroway", "amenity", "building",
+                   "religion", "shop", "sport", "leisure",
+                   "highway=motorway", "highway=trunk", "highway=primary",
+                   "highway=secondary", "highway=tertiary", "highway=unclassified",
+                   "highway=residential", "highway=motorway_link", "highway=trunk_link",
+                   "highway=primary_link"]
+}
