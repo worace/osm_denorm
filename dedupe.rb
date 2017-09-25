@@ -41,3 +41,8 @@ end
 # * official tool repeats some geometries that match both linear
 #   and area tags (count unknown)
 # * my tool outputs tags differently for same geometries (count unknown)
+
+# Needs from official tool:
+# * Include all Tags in properties
+# * optional: Exclude points (not necessarily mandatory; could do this after)
+# * optional: output single-ring geoms as polygons
